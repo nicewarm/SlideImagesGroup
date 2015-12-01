@@ -3,6 +3,8 @@ package com.example.mls.slideimagesgroup;
 import android.content.Context;
 import android.graphics.Color;
 import android.os.Debug;
+import android.support.v4.view.MotionEventCompat;
+import android.support.v4.view.ViewCompat;
 import android.support.v4.widget.ViewDragHelper;
 import android.util.AttributeSet;
 import android.util.Log;
@@ -23,6 +25,12 @@ public class DragLayout extends ViewGroup {
 
     /* 拖拽工具类 */
     private final ViewDragHelper mDragHelper;
+
+    /*子View列表*/
+    private List<View> views = new ArrayList<>();
+
+    /*最右边的View*/
+    private View mRightView;
 
     private Context context;
 
@@ -68,20 +76,40 @@ public class DragLayout extends ViewGroup {
         removeAllViews();
         for (int i = 0; i < 4; i++) {
             ImageView imageView = new ImageView(context);
+            imageView.setBackgroundColor(randomColor());
             ViewGroup.LayoutParams layoutParams = new LayoutParams(150, 150);
-            imageView.setBackgroundColor(Color.parseColor("#0096db"));
             imageView.setLayoutParams(layoutParams);
             final int finalI = i;
             imageView.setOnClickListener(new OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    Toast.makeText(context, finalI + "", Toast.LENGTH_SHORT).show();
+                    if (mDragOffset == -1) {
+                        smoothSlideTo(1);
+                    }
+                    if (mDragOffset == 1) {
+                        Toast.makeText(context, finalI + "", Toast.LENGTH_SHORT).show();
+                    }
                 }
             });
             addView(imageView);
         }
         requestLayout();
         invalidate();
+        if (getChildCount() > 0) {
+            for (int i = 0; i < getChildCount(); i++) {
+                View view = getChildAt(i);
+                views.add(view);
+                if (i == getChildCount() - 1) {
+                    mRightView = getChildAt(i);
+                }
+            }
+        }
+    }
+
+    private int randomColor() {
+        int colorValue = (int) (Math.random() * (16777216 - 1) + 1) * -1;
+        String hex = Integer.toHexString(colorValue);
+        return Color.parseColor("#" + hex);
     }
 
 
@@ -101,24 +129,42 @@ public class DragLayout extends ViewGroup {
 
     }
 
-
     /* touch事件的拦截与处理都交给mDraghelper来处理 */
     @Override
     public boolean onInterceptTouchEvent(MotionEvent ev) {
         boolean shouldIntercept = mDragHelper.shouldInterceptTouchEvent(ev);
         int action = ev.getActionMasked();
-        if (action == MotionEvent.ACTION_DOWN) {
+        if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_MOVE) {
             // action_down时就让mDragHelper开始工作，否则有时候导致异常 他大爷的
-            mDragHelper.processTouchEvent(ev);
+            if (action == MotionEvent.ACTION_MOVE) {
+                mDragHelper.processTouchEvent(ev);
+            }
+            return shouldIntercept;
+        } else {
+            mDragHelper.cancel();
+            return false;
         }
-        return shouldIntercept;
     }
 
     @Override
-    public boolean onTouchEvent(MotionEvent e) {
+    public boolean onTouchEvent(MotionEvent ev) {
         // 统一交给mDragHelper处理，由DragHelperCallback实现拖动效果
-        mDragHelper.processTouchEvent(e); // 该行代码可能会抛异常，正式发布时请将这行代码加上try catch
+        mDragHelper.processTouchEvent(ev);
+        if (ev.getAction() == MotionEvent.ACTION_UP) {
+            return false;
+        }
         return true;
+    }
+
+    private boolean isViewHit(View view, int x, int y) {
+        int[] viewLocation = new int[2];
+        view.getLocationOnScreen(viewLocation);
+        int[] parentLocation = new int[2];
+        this.getLocationOnScreen(parentLocation);
+        int screenX = parentLocation[0] + x;
+        int screenY = parentLocation[1] + y;
+        return screenX >= viewLocation[0] && screenX < viewLocation[0] + view.getWidth() &&
+                screenY >= viewLocation[1] && screenY < viewLocation[1] + view.getHeight();
     }
 
     private int getCurrentViewRight(View view) {
@@ -133,6 +179,25 @@ public class DragLayout extends ViewGroup {
         return left;
     }
 
+
+    @Override
+    public void computeScroll() {
+        if (mDragHelper.continueSettling(true)) {
+            ViewCompat.postInvalidateOnAnimation(this);
+        }
+    }
+
+    private boolean smoothSlideTo(float slideOffset) {
+        int right = slideOffset == 0f ? getCurrentViewLeft(mRightView) : getCurrentViewRight(mRightView);
+        if (mDragHelper.smoothSlideViewTo(mRightView, right, 0)) {
+            ViewCompat.postInvalidateOnAnimation(this);
+            return true;
+        }
+        return false;
+    }
+
+    private double mDragOffset = -1;
+
     /**
      * 这是拖拽效果的主要逻辑
      */
@@ -146,6 +211,7 @@ public class DragLayout extends ViewGroup {
             int halfStep = step / 2;
             int byOriginValue = left - (minLeft + maxRight) / 2;
             double spaceValue = byOriginValue * 1.0 / halfStep * maxSpace;
+            mDragOffset = byOriginValue * 1.0 / halfStep;
             space = (int) spaceValue;
             if (space > maxSpace) {
                 space = maxSpace;
@@ -174,6 +240,14 @@ public class DragLayout extends ViewGroup {
 
         @Override
         public void onViewReleased(View releasedChild, float xvel, float yvel) {
+            int right;
+            if (mDragOffset > 0) {
+                right = getCurrentViewRight(releasedChild);
+            } else {
+                right = getCurrentViewLeft(releasedChild);
+            }
+            mDragHelper.settleCapturedViewAt(right, 0);
+            invalidate();
         }
 
 
