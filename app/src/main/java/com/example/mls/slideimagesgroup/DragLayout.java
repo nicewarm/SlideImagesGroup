@@ -30,15 +30,31 @@ public class DragLayout extends ViewGroup {
 
     private int kAvatarWidth;
 
+    /*view宽度*/
     public static final int kAvatarWidthDp = 40;
+    /*view之间的间距*/
     public static final int spaceDpValue = 26;
+
     private int mVerDragRange;
     private int mHorDranRange;
+    /*view能滑动的最大范围*/
     private int maxSpace;
+    /*view能叠加的最大范围*/
     private int minSpace;
     private int space;
 
     private OnSlideToLeftAndRightListener listener;
+
+
+     /*思路
+     *
+     * view连接view，在没有距离的时候，可以认为是坐标轴为0的时候
+     * view重叠view的时候，可以认为是坐标轴-1的时候
+     * view展开的时候，可以认为坐标轴为1的时候
+     *
+     * 动画的实现，通过onlayout中space的大小完成view的展开和重叠
+     *
+     * */
 
 
     public interface OnSlideToLeftAndRightListener {
@@ -73,12 +89,13 @@ public class DragLayout extends ViewGroup {
         return (int) (dipValue * scale + 0.5f);
     }
 
+
+    /*需要计算这个viewgroup的高度，可以自行调整*/
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         measureChildren(widthMeasureSpec, heightMeasureSpec);
-
         int maxWidth = MeasureSpec.getSize(widthMeasureSpec);
-        int maxHeight = MeasureSpec.getSize(heightMeasureSpec);
+        //目前高度只使用了一个view的高度为整个viewgroup的高度
         setMeasuredDimension(maxWidth, kAvatarWidth);
     }
 
@@ -89,7 +106,7 @@ public class DragLayout extends ViewGroup {
         invalidate();
     }
 
-    /*初始化子view*/
+    /*初始化子view，加入自己项目逻辑即可*/
     private void initChildViews(List<String> images) {
         for (int i = 0; i < 4; i++) {
             ImageView imageView = new ImageView(context);
@@ -100,10 +117,12 @@ public class DragLayout extends ViewGroup {
             imageView.setOnClickListener(new OnClickListener() {
                 @Override
                 public void onClick(View v) {
+                    //view叠加在一起的时候，点击时展开
                     if (mDragOffset == -1) {
                         smoothSlideTo(1);
                         mDragOffsetLast = 1;
                     }
+                    //view展开的时候，点击时相应跳转动作
                     if (mDragOffset == 1) {
                         Toast.makeText(context, finalI + "", Toast.LENGTH_SHORT).show();
                     }
@@ -124,7 +143,7 @@ public class DragLayout extends ViewGroup {
     }
 
 
-    /*初始化布局子view*/
+    /*初始化布局子view，通过space完成展开和重叠的效果*/
     @Override
     protected void onLayout(boolean changed, int l, int t, int r, int b) {
         int wid = 0;
@@ -163,19 +182,6 @@ public class DragLayout extends ViewGroup {
         // 只要有事件拦截，就全部交给mDragHelper处理，由DragHelperCallback实现拖动效果
         mDragHelper.processTouchEvent(ev);
         return true;
-    }
-
-
-    // 判断当前点击时间是否在View中
-    private boolean isViewHit(View view, int x, int y) {
-        int[] viewLocation = new int[2];
-        view.getLocationOnScreen(viewLocation);
-        int[] parentLocation = new int[2];
-        this.getLocationOnScreen(parentLocation);
-        int screenX = parentLocation[0] + x;
-        int screenY = parentLocation[1] + y;
-        return screenX >= viewLocation[0] && screenX < viewLocation[0] + view.getWidth() &&
-                screenY >= viewLocation[1] && screenY < viewLocation[1] + view.getHeight();
     }
 
     //    探测子View的右边界
@@ -276,7 +282,7 @@ public class DragLayout extends ViewGroup {
             }
         }
 
-        //  判断滑动的边界，不能出借
+        //  判断滑动的边界，不能出界
         @Override
         public int clampViewPositionHorizontal(View child, int left, int dx) {
             final int newLeft = Math.min(Math.max(left, getCurrentViewLeft(child)), getCurrentViewRight(child));
